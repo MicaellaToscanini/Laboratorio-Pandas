@@ -1,0 +1,89 @@
+import pandas as pd
+import numpy as np
+import datetime as dt
+
+#Generar un DataFrame con los datos de los cuatro archivos
+import pandas as pd
+
+emisiones_2016 = pd.read_csv('emisiones-2016.csv', sep = ';')
+emisiones_2017 = pd.read_csv('emisiones-2017.csv', sep = ';')
+emisiones_2018 = pd.read_csv('emisiones-2018.csv', sep = ';')
+emisiones_2019 = pd.read_csv('emisiones-2019.csv', sep = ';')
+emisiones = pd.concat([emisiones_2016, emisiones_2017, emisiones_2018, emisiones_2019])
+
+emisiones
+
+
+#Filtrar las columnas del DataFrame para quedarse con las columnas ESTACION, MAGNITUD, AÑO, MES y las correspondientes a los dias D01, D02, etc
+columnas = ['ESTACION', 'MAGNITUD', 'ANO', 'MES']
+columnas.extend([col for col in emisiones if col.startswith('D')])
+emisiones = emisiones[columnas]
+emisiones
+
+#Reestructurar el DataFrame para que los valores de los contaminantes de las columnas de los dias aparezcan en una unica columna 
+emisiones = emisiones.melt(id_vars=['ESTACION', 'MAGNITUD', 'ANO', 'MES'], var_name='DIA', value_name='VALOR')
+emisiones
+
+
+
+#crear una nueva columna con las fechas a partir del año, mes y dia 
+#Primero eliminamos el caracter D del comienzo de la columna de los dias 
+emisiones['DIA'] = emisiones.DIA.str.strip('D')
+#Concatenamos las columnas del año, mes y dia
+emisiones['FECHA'] = emisiones.ANO.apply(str) + '/' + emisiones.DIA.apply(str)
+
+emisiones['FECHA'] = pd.to_datetime(emisiones.FECHA, format= '%Y/%m/%d', infer_datetime_format=True, errors='coerce')
+
+#Eliminar las filas con fechas no validas
+emisiones = emisiones.drop(emisiones[np.isnat(emisiones.FECHA)].index)
+#Ordenar el dataframe por estacion, magnitud y fecha
+emisiones.sort_values(['ESTACION', 'MAGNITUD', 'FECHA'])
+
+print(emisiones)
+
+
+
+# Mostrar las estaciones disponibles
+print('Estaciones:', emisiones.ESTACION.unique())
+# Mostrar los contaminantes disponibles
+print('Contaminantes:', emisiones.MAGNITUD.unique())
+
+
+def evolucion(estacion, contaminante, desde, hasta):
+    return emisiones[(emisiones.ESTACION == estacion) & (emisiones.MAGNITUD == contaminante) & (emisiones.FECHA >= desde) & (emisiones.FECHA <= hasta)].sort_values('FECHA').VALOR
+
+
+
+
+
+print(evolucion(56, 8, dt.datetime.strptime('2018/10/25', '%Y/%m/%d'), dt.datetime.strptime('2019/02/12', '%Y/%m/%d')))
+
+# Resumen descriptivo por contaminantes
+print(emisiones.groupby('MAGNITUD').VALOR.describe())
+
+
+# Resumen descriptivo por contaminantes y estacion
+print(emisiones.groupby(['ESTACION', 'MAGNITUD']).VALOR.describe())
+
+
+
+# Función que devuelve un resumen descriptivo de la emisiones en un contaminante dado en un estación dada
+def resumen(estacion, contaminante):
+    return emisiones[(emisiones.ESTACION == estacion) & (emisiones.MAGNITUD == contaminante)].VALOR.describe()
+
+# Resumen de Dióxido de Nitrógeno en Plaza Elíptica
+print('Resumen Dióxido de Nitrógeno en Plaza Elíptica:\n', resumen(56, 8),'\n', sep='')
+# Resumen de Dióxido de Nitrógeno en Plaza del Carmen
+print('Resumen Dióxido de Nitrógeno en Plaza del Carmen:\n', resumen(35, 8), sep='')
+
+# Función que devuelve una serie con las emisiones medias mensuales de un contaminante y un mes año para todos las estaciones
+def evolucion_mensual(contaminante, ano):
+    return emisiones[(emisiones.MAGNITUD == contaminante) & (emisiones.ANO == ano)].groupby(['ESTACION', 'MES']).VALOR.mean().unstack('MES')
+
+# Evolución del dióxido de nitrógeno en 2019
+print(evolucion_mensual(8, 2019))
+
+def evolucion_mensual_estacion(estacion, ano):
+    return emisiones[(emisiones.ESTACION == estacion) & (emisiones.ANO == ano)].groupby(['MAGNITUD', 'MES']).VALOR.mean().unstack('MES')
+
+print(evolucion_mensual_estacion(4, 2019))
